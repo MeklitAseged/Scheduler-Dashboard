@@ -344,5 +344,5 @@ class Scheduler:
         }
 
 
-# Global singleton
+# Global  singleton
 scheduler = Scheduler()
