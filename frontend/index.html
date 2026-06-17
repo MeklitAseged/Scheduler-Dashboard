@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Scheduler Monitor — OS Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<script src="chart.js"></script>
+<style>
+  :root {
+    --bg:       #08090d;
+    --surface:  #0f1117;
+    --card:     #141820;
+    --border:   #1e2330;
+    --accent:   #00e5ff;
+    --green:    #39ff7e;
+    --amber:    #ffb547;
+    --red:      #ff4d6d;
+    --purple:   #b57bff;
+    --text:     #e2e8f0;
+    --muted:    #4a5568;
+    --glow:     0 0 20px rgba(0,229,255,.25);
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-display: 'Syne', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-mono); overflow-x: hidden; }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 999; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.03) 2px, rgba(0,0,0,.03) 4px);
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: var(--font-display); font-size: 1.1rem; font-weight: 800; letter-spacing: .08em; color: var(--accent); text-shadow: var(--glow); }
+  .logo span { color: var(--text); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: .4rem; transition: background .3s; }
+  .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.5} }
+  .sim-time { font-size: .75rem; color: var(--muted); }
+
+  /* ── Controls ── */
+  .controls {
+    display: flex; gap: .75rem; align-items: center;
+    padding: 1rem 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  select {
+    background: var(--card); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--font-mono); font-size: .8rem; padding: .45rem .75rem;
+    border-radius: 4px; cursor: pointer; outline: none; appearance: none;
+  }
+  select:focus { border-color: var(--accent); }
+  button {
+    font-family: var(--font-mono); font-size: .8rem; font-weight: 500;
+    padding: .45rem 1.2rem; border-radius: 4px; border: none; cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-start { background: var(--green); color: #000; }
+  .btn-start:hover { box-shadow: 0 0 12px var(--green); }
+  .btn-stop  { background: var(--red);   color: #fff; }
+  .btn-stop:hover  { box-shadow: 0 0 12px var(--red); }
+  .algo-label { font-size: .7rem; color: var(--muted); }
+
+  /* ── Main grid ── */
+  .main { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1px; background: var(--border); }
+
+  /* ── KPI tiles ── */
+  .kpi-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--border); }
+  .kpi {
+    background: var(--card); padding: 1.2rem 1.5rem;
+    display: flex; flex-direction: column; gap: .3rem;
+  }
+  .kpi-label { font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .kpi-value { font-family: var(--font-display); font-size: 1.8rem; font-weight: 800; line-height: 1; }
+  .kpi-unit  { font-size: .65rem; color: var(--muted); }
+  .c-accent  { color: var(--accent); }
+  .c-green   { color: var(--green);  }
+  .c-amber   { color: var(--amber);  }
+  .c-purple  { color: var(--purple); }
+  .c-red     { color: var(--red);    }
+
+  /* ── Panels ── */
+  .panel {
+    background: var(--card);
+    display: flex; flex-direction: column;
+    padding: 1rem 1.5rem 1.5rem;
+    min-height: 320px;
+  }
+  .panel.wide { grid-column: span 2; }
+  .panel.full { grid-column: 1 / -1; }
+  .panel-title {
+    font-family: var(--font-display); font-size: .75rem; font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem;
+  }
+
+  /* ── Queue visual ── */
+  .queue-container { display: flex; flex-wrap: wrap; gap: .4rem; align-content: flex-start; flex: 1; }
+  .proc-chip {
+    font-size: .7rem; padding: .25rem .6rem;
+    border-radius: 3px; border: 1px solid;
+    animation: fadeIn .3s;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .chip-ready   { border-color: var(--amber); color: var(--amber);   background: rgba(255,181,71,.07); }
+  .chip-running { border-color: var(--green); color: var(--green);   background: rgba(57,255,126,.12); box-shadow: 0 0 8px rgba(57,255,126,.2); }
+  .chip-done    { border-color: var(--muted); color: var(--muted);   background: transparent; }
+
+  /* ── CPU indicator ── */
+  .cpu-box {
+    display: flex; align-items: center; justify-content: center;
+    height: 64px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 1rem;
+    font-family: var(--font-display); font-size: 1rem; font-weight: 700; letter-spacing: .05em;
+    transition: all .3s;
+  }
+  .cpu-box.busy { border-color: var(--green); color: var(--green); box-shadow: var(--glow); background: rgba(57,255,126,.05); }
+  .cpu-box.idle { color: var(--muted); }
+
+  /* ── Util bar ── */
+  .util-bar-bg { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .3rem; }
+  .util-bar    { height: 100%; border-radius: 3px; transition: width .5s; background: linear-gradient(90deg, var(--accent), var(--green)); }
+
+  /* ── Table ── */
+  .proc-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
+  .proc-table th { color: var(--muted); text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--border); font-weight: 400; letter-spacing: .05em; font-size: .65rem; text-transform: uppercase; }
+  .proc-table td { padding: .35rem .6rem; border-bottom: 1px solid rgba(30,35,48,.5); }
+  .proc-table tr:last-child td { border-bottom: none; }
+  .proc-table tr { transition: background .2s; }
+  .proc-table tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* ── Charts ── */
+  .chart-wrap { flex: 1; position: relative; min-height: 200px; }
+
+  /* ── Gantt strip ── */
+  #gantt-container { display: flex; gap: 2px; align-items: stretch; height: 40px; overflow: hidden; flex-wrap: nowrap; }
+  .gantt-block {
+    display: flex; align-items: center; justify-content: center;
+    font-size: .6rem; color: #000; font-weight: 700;
+    border-radius: 2px; min-width: 24px; flex-shrink: 0;
+    animation: fadeIn .3s;
+  }
+
+  /* ── Buffer gauge ── */
+  .buffer-visual { display: flex; gap: 3px; margin-top: .5rem; flex-wrap: wrap; }
+  .buffer-cell {
+    width: 18px; height: 18px; border-radius: 2px;
+    border: 1px solid var(--border); background: var(--bg);
+    transition: background .3s, border-color .3s;
+  }
+  .buffer-cell.filled { background: var(--amber); border-color: var(--amber); }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    .kpi-row { grid-template-columns: repeat(3,1fr); }
+    .main    { grid-template-columns: 1fr 1fr; }
+    .panel.wide { grid-column: span 2; }
+  }
+  @media (max-width: 700px) {
+    .kpi-row { grid-template-columns: repeat(2,1fr); }
+    .main    { grid-template-columns: 1fr; }
+    .panel.wide { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SCHED<span>MON</span></div>
+  <div style="display:flex;align-items:center;gap:1rem">
+    <span class="status-dot" id="dot"></span>
+    <span id="status-label" style="font-size:.75rem;color:var(--muted)">IDLE</span>
+    <span class="sim-time">t = <span id="sim-time">0.00</span>s</span>
+  </div>
+</header>
+
+<div class="controls">
+  <span class="algo-label">ALGORITHM</span>
+  <select id="algo-select">
+    <option value="FCFS">FCFS — First Come First Served</option>
+    <option value="SJF">SJF — Shortest Job First</option>
+    <option value="Priority">Priority Scheduling</option>
+    <option value="Round Robin">Round Robin (q=2s)</option>
+  </select>
+  <button class="btn-start" id="btn-start" onclick="startSim()">▶ START</button>
+  <button class="btn-stop"  id="btn-stop"  onclick="stopSim()">■ STOP</button>
+</div>
+
+<!-- KPI Row -->
+<div class="kpi-row" style="background:var(--border)">
+  <div class="kpi">
+    <div class="kpi-label">Throughput</div>
+    <div class="kpi-value c-accent" id="kpi-throughput">—</div>
+    <div class="kpi-unit">proc / sec</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Avg Waiting Time</div>
+    <div class="kpi-value c-amber" id="kpi-wait">—</div>
+    <div class="kpi-unit">seconds</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Avg Turnaround</div>
+    <div class="kpi-value c-purple" id="kpi-tat">—</div>
+    <div class="kpi-unit">seconds</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Avg Response</div>
+    <div class="kpi-value c-green" id="kpi-resp">—</div>
+    <div class="kpi-unit">seconds</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">CPU Utilization</div>
+    <div class="kpi-value c-red" id="kpi-cpu">—</div>
+    <div class="kpi-unit">%
+      <div class="util-bar-bg" style="width:100px"><div class="util-bar" id="cpu-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Completed</div>
+    <div class="kpi-value c-green" id="kpi-done">0</div>
+    <div class="kpi-unit">processes</div>
+  </div>
+</div>
+
+<!-- Main panels -->
+<div class="main" style="background:var(--border)">
+
+  <!-- CPU + Buffer -->
+  <div class="panel">
+    <div class="panel-title">CPU State</div>
+    <div class="cpu-box idle" id="cpu-display">IDLE</div>
+    <div style="font-size:.65rem;color:var(--muted);margin-bottom:.4rem">BOUNDED BUFFER (capacity = 10)</div>
+    <div class="buffer-visual" id="buffer-visual">
+      <!-- cells generated by JS -->
+    </div>
+    <div style="margin-top:.5rem;font-size:.65rem;color:var(--muted)">
+      <span id="buffer-count">0</span>/10 slots occupied
+    </div>
+  </div>
+
+  <!-- Ready Queue -->
+  <div class="panel">
+    <div class="panel-title">Ready Queue</div>
+    <div class="queue-container" id="ready-queue"></div>
+  </div>
+
+  <!-- Throughput chart -->
+  <div class="panel">
+    <div class="panel-title">Throughput Over Time</div>
+    <div class="chart-wrap"><canvas id="chart-throughput"></canvas></div>
+  </div>
+
+  <!-- Wait / Turnaround chart -->
+  <div class="panel">
+    <div class="panel-title">Avg Wait &amp; Turnaround</div>
+    <div class="chart-wrap"><canvas id="chart-wait"></canvas></div>
+  </div>
+
+  <!-- Gantt strip -->
+  <div class="panel full" style="min-height:auto">
+    <div class="panel-title">Gantt Strip (recent execution)</div>
+    <div id="gantt-container"></div>
+  </div>
+
+  <!-- CPU Utilization chart -->
+  <div class="panel wide">
+    <div class="panel-title">CPU Utilization %</div>
+    <div class="chart-wrap"><canvas id="chart-cpu"></canvas></div>
+  </div>
+
+  <!-- Completed process table -->
+  <div class="panel wide">
+    <div class="panel-title">Completed Processes</div>
+    <div style="overflow:auto;flex:1">
+      <table class="proc-table">
+        <thead><tr>
+          <th>PID</th><th>Burst</th><th>Wait</th><th>Turnaround</th><th>Response</th>
+        </tr></thead>
+        <tbody id="proc-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = "http://localhost:5001/api";
+let es = null;
+
+// ── Chart setup ──────────────────────────────────────────────────────────────
+const chartDefaults = {
+  type: 'line',
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#4a5568', font: { family: "'JetBrains Mono'", size: 9 } }, grid: { color: '#1e2330' } },
+      y: { ticks: { color: '#4a5568', font: { family: "'JetBrains Mono'", size: 9 } }, grid: { color: '#1e2330' }, beginAtZero: true },
+    },
+  },
+};
+
+function makeChart(id, color1, color2, label1, label2) {
+  const ctx = document.getElementById(id).getContext('2d');
+  return new Chart(ctx, {
+    ...chartDefaults,
+    data: {
+      labels: [],
+      datasets: [
+        { label: label1, data: [], borderColor: color1, backgroundColor: color1 + '15', borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.3 },
+        ...(label2 ? [{ label: label2, data: [], borderColor: color2, backgroundColor: color2 + '15', borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.3 }] : []),
+      ],
+    },
+    options: {
+      ...chartDefaults.options,
+      plugins: { legend: { display: !!label2, labels: { color: '#4a5568', font: { family: "'JetBrains Mono'", size: 9 }, boxWidth: 10 } } },
+    },
+  });
+}
+
+const chartThroughput = makeChart('chart-throughput', '#00e5ff', null, 'Throughput');
+const chartWait       = makeChart('chart-wait',       '#ffb547', '#b57bff', 'Avg Wait', 'Avg Turnaround');
+const chartCpu        = makeChart('chart-cpu',        '#ff4d6d', null, 'CPU Util %');
+
+// ── Buffer cells ──────────────────────────────────────────────────────────────
+const BUF_CAP = 10;
+const bufVis = document.getElementById('buffer-visual');
+for (let i = 0; i < BUF_CAP; i++) {
+  const c = document.createElement('div');
+  c.className = 'buffer-cell';
+  c.id = 'bc-' + i;
+  bufVis.appendChild(c);
+}
+
+function updateBuffer(n) {
+  for (let i = 0; i < BUF_CAP; i++) {
+    document.getElementById('bc-' + i).className = 'buffer-cell' + (i < n ? ' filled' : '');
+  }
+  document.getElementById('buffer-count').textContent = n;
+}
+
+// ── Gantt ─────────────────────────────────────────────────────────────────────
+const GANTT_COLORS = ['#00e5ff','#39ff7e','#b57bff','#ffb547','#ff4d6d','#00cfff','#ffe066','#ff79a8'];
+const ganttPidColor = {};
+let ganttColorIdx = 0;
+const ganttBlocks = [];
+const MAX_GANTT = 30;
+
+function addGanttBlock(name, pid) {
+  if (!ganttPidColor[pid]) {
+    ganttPidColor[pid] = GANTT_COLORS[ganttColorIdx++ % GANTT_COLORS.length];
+  }
+  ganttBlocks.push({ name, color: ganttPidColor[pid] });
+  if (ganttBlocks.length > MAX_GANTT) ganttBlocks.shift();
+  renderGantt();
+}
+
+function renderGantt() {
+  const c = document.getElementById('gantt-container');
+  c.innerHTML = '';
+  const width = Math.floor(c.clientWidth / ganttBlocks.length);
+  ganttBlocks.forEach(b => {
+    const d = document.createElement('div');
+    d.className = 'gantt-block';
+    d.style.background = b.color;
+    d.style.flex = '1';
+    d.textContent = b.name;
+    c.appendChild(d);
+  });
+}
+
+// ── Chart push ────────────────────────────────────────────────────────────────
+let chartTick = 0;
+function pushCharts(m, t) {
+  const label = t.toFixed(1);
+  chartTick++;
+  if (chartTick % 2 !== 0) return; // throttle
+
+  function push(chart, ...vals) {
+    chart.data.labels.push(label);
+    vals.forEach((v, i) => chart.data.datasets[i].data.push(v));
+    if (chart.data.labels.length > 60) {
+      chart.data.labels.shift();
+      chart.data.datasets.forEach(d => d.data.shift());
+    }
+    chart.update('none');
+  }
+
+  push(chartThroughput, m.throughput);
+  push(chartWait, m.avg_waiting_time, m.avg_turnaround_time);
+  push(chartCpu, m.cpu_utilization);
+}
+
+// ── Render state ──────────────────────────────────────────────────────────────
+let lastEventCount = 0;
+
+function render(state) {
+  const m = state.metrics;
+  // KPIs
+  document.getElementById('kpi-throughput').textContent = m.throughput.toFixed(3);
+  document.getElementById('kpi-wait').textContent       = m.avg_waiting_time.toFixed(2);
+  document.getElementById('kpi-tat').textContent        = m.avg_turnaround_time.toFixed(2);
+  document.getElementById('kpi-resp').textContent       = m.avg_response_time.toFixed(2);
+  document.getElementById('kpi-cpu').textContent        = m.cpu_utilization.toFixed(1);
+  document.getElementById('kpi-done').textContent       = m.completed_count;
+  document.getElementById('sim-time').textContent       = state.sim_time.toFixed(2);
+  document.getElementById('cpu-bar').style.width        = m.cpu_utilization + '%';
+
+  // CPU box
+  const cpuBox = document.getElementById('cpu-display');
+  if (state.running) {
+    cpuBox.className = 'cpu-box busy';
+    cpuBox.textContent = `▶ ${state.running.name}  (rem: ${state.running.remaining}s)`;
+  } else {
+    cpuBox.className = 'cpu-box idle';
+    cpuBox.textContent = 'IDLE';
+  }
+
+  // Buffer
+  updateBuffer(state.buffer_size);
+
+  // Ready queue
+  const rq = document.getElementById('ready-queue');
+  rq.innerHTML = '';
+  state.ready_queue.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'proc-chip chip-ready';
+    d.textContent = `${p.name} (${p.remaining}s)`;
+    rq.appendChild(d);
+  });
+
+  // Completed table
+  const tbody = document.getElementById('proc-table-body');
+  tbody.innerHTML = '';
+  [...state.completed].reverse().forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${p.name}</td><td>${p.burst}</td><td>${p.wait}</td><td>${p.turnaround}</td><td>${p.response}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  // Process new history events for Gantt
+  const hist = state.history || [];
+  const newEvents = hist.slice(lastEventCount);
+  lastEventCount = hist.length;
+  newEvents.forEach(ev => {
+    if (ev.event === 'start') addGanttBlock(ev.name, ev.pid);
+  });
+
+  // Charts
+  pushCharts(m, state.sim_time);
+}
+
+// ── SSE connection ────────────────────────────────────────────────────────────
+function connect() {
+  if (es) es.close();
+  es = new EventSource(`${API}/stream`);
+  es.onmessage = e => {
+    try { render(JSON.parse(e.data)); } catch {}
+  };
+  es.onerror = () => {
+    document.getElementById('dot').className = 'status-dot';
+    document.getElementById('status-label').textContent = 'DISCONNECTED';
+  };
+}
+
+async function startSim() {
+  const algo = document.getElementById('algo-select').value;
+  lastEventCount = 0;
+  ganttBlocks.length = 0;
+  // Reset charts
+  [chartThroughput, chartWait, chartCpu].forEach(c => {
+    c.data.labels = []; c.data.datasets.forEach(d => d.data = []); c.update('none');
+  });
+  try {
+    await fetch(`${API}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ algorithm: algo }) });
+    document.getElementById('dot').className = 'status-dot active';
+    document.getElementById('status-label').textContent = algo.toUpperCase();
+    connect();
+  } catch (err) {
+    alert('Cannot reach backend. Make sure app.py is running on port 5000.');
+  }
+}
+
+async function stopSim() {
+  try {
+    await fetch(`${API}/stop`, { method: 'POST' });
+    document.getElementById('dot').className = 'status-dot';
+    document.getElementById('status-label').textContent = 'STOPPED';
+    document.getElementById('cpu-display').className = 'cpu-box idle';
+    document.getElementById('cpu-display').textContent = 'IDLE';
+  } catch {}
+}
+
+// Auto-connect on load (in case backend is already running)
+window.addEventListener('load', () => {
+  fetch(`${API}/state`).then(r => r.json()).then(s => { if (s.is_running) { connect(); } }).catch(() => {});
+});
+</script>
+</body>
+</html>
