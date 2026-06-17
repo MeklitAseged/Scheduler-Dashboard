@@ -73,10 +73,10 @@
   .btn-stop:hover  { box-shadow: 0 0 12px var(--red); }
   .algo-label { font-size: .7rem; color: var(--muted); }
 
-  /* ── Main grid ── */
+  /*  Main grid  */
   .main { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1px; background: var(--border); }
 
-  /* ── KPI tiles ── */
+  /*  KPI tiles  */
   .kpi-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--border); }
   .kpi {
     background: var(--card); padding: 1.2rem 1.5rem;
@@ -91,7 +91,7 @@
   .c-purple  { color: var(--purple); }
   .c-red     { color: var(--red);    }
 
-  /* ── Panels ── */
+  /*  Panels  */
   .panel {
     background: var(--card);
     display: flex; flex-direction: column;
@@ -106,7 +106,7 @@
     margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem;
   }
 
-  /* ── Queue visual ── */
+  /*  Queue visual  */
   .queue-container { display: flex; flex-wrap: wrap; gap: .4rem; align-content: flex-start; flex: 1; }
   .proc-chip {
     font-size: .7rem; padding: .25rem .6rem;
@@ -118,7 +118,7 @@
   .chip-running { border-color: var(--green); color: var(--green);   background: rgba(57,255,126,.12); box-shadow: 0 0 8px rgba(57,255,126,.2); }
   .chip-done    { border-color: var(--muted); color: var(--muted);   background: transparent; }
 
-  /* ── CPU indicator ── */
+  /*  CPU indicator */
   .cpu-box {
     display: flex; align-items: center; justify-content: center;
     height: 64px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 1rem;
@@ -128,11 +128,11 @@
   .cpu-box.busy { border-color: var(--green); color: var(--green); box-shadow: var(--glow); background: rgba(57,255,126,.05); }
   .cpu-box.idle { color: var(--muted); }
 
-  /* ── Util bar ── */
+  /*  Util bar  */
   .util-bar-bg { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .3rem; }
   .util-bar    { height: 100%; border-radius: 3px; transition: width .5s; background: linear-gradient(90deg, var(--accent), var(--green)); }
 
-  /* ── Table ── */
+  /*  Table  */
   .proc-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
   .proc-table th { color: var(--muted); text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--border); font-weight: 400; letter-spacing: .05em; font-size: .65rem; text-transform: uppercase; }
   .proc-table td { padding: .35rem .6rem; border-bottom: 1px solid rgba(30,35,48,.5); }
@@ -140,10 +140,10 @@
   .proc-table tr { transition: background .2s; }
   .proc-table tr:hover td { background: rgba(255,255,255,.02); }
 
-  /* ── Charts ── */
+  /* Charts  */
   .chart-wrap { flex: 1; position: relative; min-height: 200px; }
 
-  /* ── Gantt strip ── */
+  /*  Gantt strip  */
   #gantt-container { display: flex; gap: 2px; align-items: stretch; height: 40px; overflow: hidden; flex-wrap: nowrap; }
   .gantt-block {
     display: flex; align-items: center; justify-content: center;
@@ -152,7 +152,7 @@
     animation: fadeIn .3s;
   }
 
-  /* ── Buffer gauge ── */
+  /*  Buffer gauge  */
   .buffer-visual { display: flex; gap: 3px; margin-top: .5rem; flex-wrap: wrap; }
   .buffer-cell {
     width: 18px; height: 18px; border-radius: 2px;
@@ -161,7 +161,7 @@
   }
   .buffer-cell.filled { background: var(--amber); border-color: var(--amber); }
 
-  /* ── Responsive ── */
+  /*  Responsive */
   @media (max-width: 1100px) {
     .kpi-row { grid-template-columns: repeat(3,1fr); }
     .main    { grid-template-columns: 1fr 1fr; }
@@ -298,7 +298,7 @@
 const API = "http://localhost:5001/api";
 let es = null;
 
-// ── Chart setup ──────────────────────────────────────────────────────────────
+//  Chart setup 
 const chartDefaults = {
   type: 'line',
   options: {
@@ -335,7 +335,7 @@ const chartThroughput = makeChart('chart-throughput', '#00e5ff', null, 'Throughp
 const chartWait       = makeChart('chart-wait',       '#ffb547', '#b57bff', 'Avg Wait', 'Avg Turnaround');
 const chartCpu        = makeChart('chart-cpu',        '#ff4d6d', null, 'CPU Util %');
 
-// ── Buffer cells ──────────────────────────────────────────────────────────────
+//  Buffer cells 
 const BUF_CAP = 10;
 const bufVis = document.getElementById('buffer-visual');
 for (let i = 0; i < BUF_CAP; i++) {
@@ -352,7 +352,7 @@ function updateBuffer(n) {
   document.getElementById('buffer-count').textContent = n;
 }
 
-// ── Gantt ─────────────────────────────────────────────────────────────────────
+//  Gantt 
 const GANTT_COLORS = ['#00e5ff','#39ff7e','#b57bff','#ffb547','#ff4d6d','#00cfff','#ffe066','#ff79a8'];
 const ganttPidColor = {};
 let ganttColorIdx = 0;
@@ -382,7 +382,7 @@ function renderGantt() {
   });
 }
 
-// ── Chart push ────────────────────────────────────────────────────────────────
+//  Chart push 
 let chartTick = 0;
 function pushCharts(m, t) {
   const label = t.toFixed(1);
@@ -404,7 +404,7 @@ function pushCharts(m, t) {
   push(chartCpu, m.cpu_utilization);
 }
 
-// ── Render state ──────────────────────────────────────────────────────────────
+//  Render state 
 let lastEventCount = 0;
 
 function render(state) {
@@ -463,7 +463,7 @@ function render(state) {
   pushCharts(m, state.sim_time);
 }
 
-// ── SSE connection ────────────────────────────────────────────────────────────
+//  SSE connection
 function connect() {
   if (es) es.close();
   es = new EventSource(`${API}/stream`);

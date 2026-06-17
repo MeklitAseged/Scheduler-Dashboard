@@ -1,8 +1,3 @@
-"""
-Scheduler Simulation Backend
-Uses threading semaphores and a bounded buffer (producer-consumer pattern)
-to manage concurrent process execution and resource access.
-"""
 
 import threading
 import time
@@ -12,8 +7,6 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 import math
 
-
-# ─── Data Structures ────────────────────────────────────────────────────────
 
 @dataclass
 class Process:
@@ -45,7 +38,7 @@ class SchedulerMetrics:
     timeline: list = field(default_factory=list)  # Gantt data
 
 
-# ─── Bounded Buffer (Ring Buffer) ───────────────────────────────────────────
+#  Bounded Buffer 
 
 class BoundedBuffer:
     """
@@ -93,7 +86,7 @@ class BoundedBuffer:
             return len(self.buffer)
 
 
-# ─── Scheduler Algorithms ───────────────────────────────────────────────────
+#  Scheduler Algorithms 
 
 class Scheduler:
     """
@@ -122,7 +115,7 @@ class Scheduler:
         self._stop_event = threading.Event()
         self.history: List[dict] = []   # timestamped snapshots for charts
 
-    # ── Process Factory ──────────────────────────────────────────────────────
+    # Process Factory 
 
     def _next_pid(self) -> int:
         self._pid_counter += 1
@@ -141,7 +134,7 @@ class Scheduler:
         )
         return p
 
-    # ── Producer Thread ──────────────────────────────────────────────────────
+    #  Producer Thread 
 
     def _producer(self):
         """Periodically generates processes and deposits them in the buffer."""
@@ -156,7 +149,7 @@ class Scheduler:
             if success:
                 self._record_event("arrive", p)
 
-    # ── CPU Consumer Thread ──────────────────────────────────────────────────
+    #  CPU Consumer Thread
 
     def _get_next_process(self, queue: List[Process]) -> Optional[Process]:
         if not queue:
@@ -238,7 +231,7 @@ class Scheduler:
             finally:
                 self._cpu_sem.release()
 
-    # ── Metrics ──────────────────────────────────────────────────────────────
+    # Metrics 
 
     def _update_metrics(self):
         with self._result_lock:
@@ -278,7 +271,7 @@ class Scheduler:
         }
         self.history.append(snap)
 
-    # ── Lifecycle ─────────────────────────────────────────────────────────────
+    #  Lifecycle 
 
     def start(self, algorithm: str = "FCFS"):
         if self.is_running:
